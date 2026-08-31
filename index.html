@@ -438,14 +438,37 @@ function openProductForm(product, barcode, prefill){
   document.getElementById('product-overlay').classList.add('active');
 }
 
-function onPhotoSelected(evt){
+async function onPhotoSelected(evt){
   const file = evt.target.files[0];
   if(!file) return;
-  pendingPhotoFile = file;
+  toast('Comprimo la foto...');
+  const compressed = await compressImage(file, 900, 0.75);
+  pendingPhotoFile = compressed;
   const prev = document.getElementById('f-photo-preview');
   const ph = document.getElementById('f-photo-ph');
-  prev.src = URL.createObjectURL(file);
+  prev.src = URL.createObjectURL(compressed);
   prev.style.display='block'; ph.style.display='none';
+}
+
+/* Ridimensiona e comprime una foto lato client prima dell'upload:
+   riduce il lato lungo a maxDim px e ricodifica in JPEG a qualità ridotta,
+   così le foto scattate da smartphone (spesso 3-8 MB) diventano ~100-200 KB. */
+async function compressImage(file, maxDim, quality){
+  try{
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    let { width, height } = bitmap;
+    if(width > maxDim || height > maxDim){
+      if(width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+      else { width = Math.round(width * maxDim / height); height = maxDim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    return await new Promise(resolve => canvas.toBlob(b => resolve(b || file), 'image/jpeg', quality));
+  }catch(e){
+    return file; // se la compressione fallisce, carica comunque l'originale
+  }
 }
 
 async function saveProduct(){
